@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: infinihash-kyc
+Version: 0.1.0
+Summary: Python SDK for the Infinihash KYC API (KYC/KYB cases, sanctions screening).
+Author: Infinihash
+License: MIT
+Project-URL: Homepage, https://kyc.infinihash.com
+Project-URL: API reference, https://kyc-api.infinihash.com/api/v1/openapi.json
+Project-URL: Source, https://github.com/Infinihash/kyc-python
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: requests>=2.28
+Provides-Extra: test
+Requires-Dist: pytest>=7; extra == "test"
+Dynamic: license-file
+
+# kyc-python
+Python SDK for the Infinihash KYC API
