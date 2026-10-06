@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from infinihash_kyc import KYC, KYCError, ScreeningUnavailable, is_unscreened
+from infinihash_kyc import KYC, KYCError, ScreeningUnavailable, create_sandbox_key, is_unscreened
 
 STATE = {}
 
@@ -55,6 +55,10 @@ class Stub(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "entityName must be 2–300 characters"})
             return self._send(201, {"id": "sub_1", "status": "pending", "entityType": b["entityType"],
                                     "requiredChecks": ["sanctions_ofac", "pep"], "_links": {}})
+        if self.path == "/api/sandbox/keys":
+            if "@" not in b.get("email", ""):
+                return self._send(400, {"error": "a valid email is required"})
+            return self._send(201, {"apiKey": "kyc_sbx_" + "0" * 48, "tier": "sandbox"})
         if self.path == "/api/kyc/sub_1/run":
             return self._send(200, {"message": "Checks started", "submissionId": "sub_1"})
         if self.path == "/api/kyc/screen":
@@ -146,3 +150,18 @@ def test_api_key_is_required(monkeypatch):
     monkeypatch.delenv("INFINIHASH_KYC_KEY", raising=False)
     with pytest.raises(ValueError):
         KYC()
+
+
+def test_a_sanctions_screening_error_counts_as_unscreened(kyc):
+    # KYC-API 2026-10-06: a sanctions list that was NOT SEARCHED routes the case
+    # to review with screeningErrors=['sanctions'] but no summary.error.
+    STATE["final"] = {"id": "sub_1", "status": "review",
+                      "summary": {"action": "manual_review", "screeningErrors": ["sanctions"]}, "checks": []}
+    assert is_unscreened(kyc.submissions.wait("sub_1", poll=0.01))
+
+
+def test_create_sandbox_key(kyc):
+    assert create_sandbox_key("dev@example.com", base_url=kyc.base_url).startswith("kyc_sbx_")
+    with pytest.raises(KYCError) as e:
+        create_sandbox_key("nope", base_url=kyc.base_url)
+    assert e.value.status == 400

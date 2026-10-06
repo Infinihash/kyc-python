@@ -4,9 +4,36 @@ Python SDK for the [Infinihash KYC API](https://kyc.infinihash.com): KYC and KYB
 sanctions screening, and case reports.
 
 ```bash
-pip install "git+https://github.com/Infinihash/kyc-python@v0.1.0"
+pip install "git+https://github.com/Infinihash/kyc-python@v0.2.0"
 export INFINIHASH_KYC_KEY=...        # your API key
 ```
+
+## Try it free: the sandbox
+
+No account and no billing. A sandbox key runs the real case lifecycle with
+deterministic results, and no provider is ever called:
+
+```python
+from infinihash_kyc import KYC, create_sandbox_key
+
+kyc = KYC(api_key=create_sandbox_key("you@example.com"))   # kyc_sbx_..., shown once
+case = kyc.submissions.create(entity_type="individual", entity_name="Jane SANCTIONED Doe")
+kyc.submissions.run(case["id"])
+print(kyc.submissions.wait(case["id"])["summary"]["action"])   # block_report
+```
+
+| Entity name contains | Result |
+|---|---|
+| `SANCTIONED` | sanctions HIT, so the case is `failed` / `block_report` |
+| `UNSCREENED` | the sanctions list is not searched, so the case ends in `review` and `is_unscreened()` is True |
+| `PEP` | `pep_screen` goes to review, so the case gets `enhanced_review` |
+| `ADVERSE` | `negative_news` goes to review (adverse media) |
+| `LIVENESS_FAIL` | `liveness_check` fails |
+| anything else | every check passes, and the case is `complete` / `approve` |
+
+Sandbox keys can create, run, read, list and export cases and screen names.
+Routes that call paid providers (OCR, liveness, biometrics) return
+`403 sandbox_route_unavailable`. Use a production key for those.
 
 ## Screen a name
 
@@ -37,7 +64,7 @@ kyc.submissions.run(case["id"])
 result = kyc.submissions.wait(case["id"])      # complete | review | failed
 
 if is_unscreened(result):
-    print("manual review:", result["summary"]["error"])
+    print("manual review:", result["summary"].get("error") or result["summary"]["screeningErrors"])
 else:
     print(result["summary"]["action"])         # approve | enhanced_review | manual_review | block_report
 pdf = kyc.submissions.export_pdf(case["id"])
