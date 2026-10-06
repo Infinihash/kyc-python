@@ -127,8 +127,33 @@ class _Submissions:
 
 
 def is_unscreened(submission: Dict[str, Any]) -> bool:
-    """True when the case finished without being screened (fail-closed review)."""
-    return bool(((submission or {}).get("summary") or {}).get("error"))
+    """True when the case finished without being fully screened (fail-closed review).
+
+    Either no checklist ran (``summary.error``), or a screen could not be
+    performed (``summary.screeningErrors``, e.g. a sanctions list that was not
+    searched). Such a case is never ``complete``; treat it as unscreened, not clear.
+    """
+    summary = (submission or {}).get("summary") or {}
+    return bool(summary.get("error") or summary.get("screeningErrors"))
+
+
+def create_sandbox_key(email: str, base_url: Optional[str] = None, timeout: float = DEFAULT_TIMEOUT) -> str:
+    """Self-serve sandbox key (``kyc_sbx_...``), returned once. No account needed.
+
+    Sandbox keys run the real case lifecycle with deterministic results and are
+    never billed. Magic entity names: SANCTIONED, UNSCREENED, PEP, ADVERSE,
+    LIVENESS_FAIL; any other name passes. See ``GET /api/sandbox``.
+    """
+    url = (base_url or os.environ.get("INFINIHASH_KYC_URL") or DEFAULT_BASE_URL).rstrip("/")
+    r = requests.post(url + "/api/sandbox/keys", json={"email": email}, timeout=timeout,
+                      headers={"User-Agent": "infinihash-kyc-python/0.2.0"})
+    if r.status_code != 201:
+        try:
+            msg = r.json().get("error")
+        except ValueError:
+            msg = r.text[:200]
+        raise KYCError(r.status_code, msg or r.reason)
+    return r.json()["apiKey"]
 
 
 class KYC:
@@ -140,7 +165,7 @@ class KYC:
         self.base_url = (base_url or os.environ.get("INFINIHASH_KYC_URL") or DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
         self._s = session or requests.Session()
-        self._s.headers.update({"X-API-Key": self.api_key, "User-Agent": "infinihash-kyc-python/0.1.0"})
+        self._s.headers.update({"X-API-Key": self.api_key, "User-Agent": "infinihash-kyc-python/0.2.0"})
         self.submissions = _Submissions(self)
 
     def screen(self, name: str, country: Optional[str] = None, dob: Optional[str] = None) -> Dict[str, Any]:
